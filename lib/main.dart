@@ -1,15 +1,22 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// URL utama yang ditampilkan di WebView.
 const String kHomeUrl = 'https://oregonetservice.my.id/';
 
 /// Warna brand, diambil dari logo Oregonet.
 const Color kBrandColor = Color(0xFF8B0021);
+
+/// Batas ukuran upload dari form web (server membatasi 2MB).
+const int kMaxUploadBytes = 1800 * 1024; // sisakan margin di bawah 2MB
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,6 +59,7 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
 
   bool _isLoading = true;
   bool _isRefreshing = false;
+  bool _isPickingFile = false;
 
   // State untuk gesture pull-to-refresh manual (dipantau lewat Listener,
   // bukan GestureDetector, supaya scroll WebView tidak ikut ke-block).
@@ -64,6 +72,48 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
   void initState() {
     super.initState();
     _controller = _createController();
+  }
+
+  /// Kompres gambar (JPG/PNG) supaya di bawah batas server.
+  /// File non-gambar dikembalikan apa adanya.
+  Future<String> _compressIfImage(String path) async {
+    final lower = path.toLowerCase();
+    final isImage = lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png');
+    if (!isImage) return path;
+
+    // Kalau sudah cukup kecil, tidak perlu dikompres.
+    if (await File(path).length() <= kMaxUploadBytes) return path;
+
+    final dir = await getTemporaryDirectory();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+
+    // Coba beberapa level kualitas sampai ukurannya masuk batas.
+    const attempts = [
+      (quality: 80, size: 1600),
+      (quality: 65, size: 1280),
+      (quality: 50, size: 1024),
+    ];
+
+    String best = path;
+    for (final a in attempts) {
+      final target = '${dir.path}/proof_${stamp}_${a.quality}.jpg';
+      final result = await FlutterImageCompress.compressAndGetFile(
+        path,
+        target,
+        quality: a.quality,
+        minWidth: a.size,
+        minHeight: a.size,
+        format: CompressFormat.jpeg,
+      );
+      if (result == null) continue;
+      best = result.path;
+      if (await File(best).length() <= kMaxUploadBytes) break;
+    }
+    debugPrint(
+        'Compressed: $path -> $best (${await File(best).length()} bytes)');
+    return best;
   }
 
   WebViewController _createController() {
@@ -113,21 +163,33 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
     if (controller.platform is AndroidWebViewController) {
       final androidController = controller.platform as AndroidWebViewController;
       androidController.setMediaPlaybackRequiresUserGesture(false);
+      AndroidWebViewController.enableDebugging(true);
       androidController.setOnShowFileSelector((params) async {
+        if (_isPickingFile) return <String>[];
+        _isPickingFile = true;
         try {
           final List<PlatformFile> files;
           if (params.mode == FileSelectorMode.openMultiple) {
-            files = await FilePicker.pickFiles(type: FileType.any);
+            files = await FilePicker.pickFiles(type: FileType.image);
           } else {
-            final single = await FilePicker.pickFile(type: FileType.any);
+            final single = await FilePicker.pickFile(type: FileType.image);
             files = single == null ? <PlatformFile>[] : <PlatformFile>[single];
           }
-          return files
-              .where((f) => f.path != null)
-              .map((f) => Uri.file(f.path!).toString())
-              .toList();
-        } catch (_) {
+          debugPrint('File picker result: '
+              '${files.map((f) => '${f.name} -> ${f.path}').toList()}');
+
+          final uris = <String>[];
+          for (final f in files) {
+            if (f.path == null) continue;
+            final finalPath = await _compressIfImage(f.path!);
+            uris.add(Uri.file(finalPath).toString());
+          }
+          return uris;
+        } catch (e, st) {
+          debugPrint('File selector error: $e\n$st');
           return <String>[];
+        } finally {
+          _isPickingFile = false;
         }
       });
     }
