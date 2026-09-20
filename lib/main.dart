@@ -1,121 +1,276 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
+import 'package:file_picker/file_picker.dart';
+
+/// URL utama yang ditampilkan di WebView.
+const String kHomeUrl = 'https://oregonetservice.my.id/';
+
+/// Warna brand, diambil dari logo Oregonet.
+const Color kBrandColor = Color(0xFF8B0021);
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  // Orientasi bebas (portrait & landscape).
+  SystemChrome.setPreferredOrientations(const [
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  runApp(const OregonetServiceApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class OregonetServiceApp extends StatelessWidget {
+  const OregonetServiceApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Oregonet Service',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: kBrandColor),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const WebViewHomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class WebViewHomePage extends StatefulWidget {
+  const WebViewHomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<WebViewHomePage> createState() => _WebViewHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _WebViewHomePageState extends State<WebViewHomePage> {
+  late final WebViewController _controller;
 
-  void _incrementCounter() {
+  bool _isLoading = true;
+  bool _isRefreshing = false;
+
+  // State untuk gesture pull-to-refresh manual (dipantau lewat Listener,
+  // bukan GestureDetector, supaya scroll WebView tidak ikut ke-block).
+  double _dragDistance = 0;
+  bool _dragEligible = false;
+  double? _dragStartY;
+  static const double _refreshTriggerDistance = 90;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = _createController();
+  }
+
+  WebViewController _createController() {
+    late final PlatformWebViewControllerCreationParams params;
+    if (WebViewPlatform.instance is WebKitWebViewPlatform) {
+      params = WebKitWebViewControllerCreationParams(
+        allowsInlineMediaPlayback: true,
+        mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
+      );
+    } else {
+      params = const PlatformWebViewControllerCreationParams();
+    }
+
+    final controller = WebViewController.fromPlatformCreationParams(params);
+    controller
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.white)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) {
+            if (mounted) setState(() => _isLoading = true);
+          },
+          onPageFinished: (_) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _isRefreshing = false;
+              });
+            }
+          },
+          onWebResourceError: (_) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _isRefreshing = false;
+              });
+            }
+          },
+          // Semua navigasi tetap ditangani di dalam WebView ini.
+          // Tidak pernah dilempar ke Chrome/Edge/browser lain.
+          onNavigationRequest: (request) => NavigationDecision.navigate,
+        ),
+      )
+      ..loadRequest(Uri.parse(kHomeUrl));
+
+    // Dukungan upload file/foto dari form web (Android).
+    if (controller.platform is AndroidWebViewController) {
+      final androidController = controller.platform as AndroidWebViewController;
+      androidController.setMediaPlaybackRequiresUserGesture(false);
+      androidController.setOnShowFileSelector((params) async {
+        try {
+          final List<PlatformFile> files;
+          if (params.mode == FileSelectorMode.openMultiple) {
+            files = await FilePicker.pickFiles(type: FileType.any);
+          } else {
+            final single = await FilePicker.pickFile(type: FileType.any);
+            files = single == null ? <PlatformFile>[] : <PlatformFile>[single];
+          }
+          return files
+              .where((f) => f.path != null)
+              .map((f) => Uri.file(f.path!).toString())
+              .toList();
+        } catch (_) {
+          return <String>[];
+        }
+      });
+    }
+    // Catatan iOS: WKWebView (dipakai lewat webview_flutter_wkwebview)
+    // sudah menampilkan file chooser native untuk <input type="file">
+    // selama NSCameraUsageDescription & NSPhotoLibraryUsageDescription
+    // sudah diisi di Info.plist — tidak perlu callback tambahan.
+
+    return controller;
+  }
+
+  Future<void> _reload() async {
+    setState(() => _isRefreshing = true);
+    await _controller.reload();
+  }
+
+  /// true jika app boleh benar-benar keluar (popped),
+  /// false jika sudah ditangani (goBack di WebView / dialog dibatalkan).
+  Future<bool> _handleBack() async {
+    if (await _controller.canGoBack()) {
+      await _controller.goBack();
+      return false;
+    }
+    if (!mounted) return false;
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Keluar Aplikasi'),
+        content:
+            const Text('Apakah kamu yakin ingin keluar dari aplikasi ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: kBrandColor),
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+    return shouldExit ?? false;
+  }
+
+  Future<void> _onPointerDown(PointerDownEvent event) async {
+    if (_isRefreshing) return;
+    _dragStartY = event.position.dy;
+    _dragEligible = false;
+    final scrollPos = await _controller.getScrollPosition();
+    // Pastikan pointer masih di posisi awal saat hasil async ini kembali
+    // (belum di-release / belum ganti drag baru).
+    if (_dragStartY == event.position.dy) {
+      _dragEligible = scrollPos.dy <= 0;
+    }
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (!_dragEligible || _isRefreshing || _dragStartY == null) return;
+    final delta = event.position.dy - _dragStartY!;
+    if (delta > 0) {
+      setState(() {
+        _dragDistance = delta.clamp(0, _refreshTriggerDistance * 1.5);
+      });
+    } else if (_dragDistance != 0) {
+      setState(() => _dragDistance = 0);
+    }
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    _finishDrag();
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    _finishDrag();
+  }
+
+  void _finishDrag() {
+    if (!_dragEligible) {
+      _dragStartY = null;
+      return;
+    }
+    final shouldRefresh = _dragDistance >= _refreshTriggerDistance;
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _dragDistance = 0;
+      _dragEligible = false;
     });
+    _dragStartY = null;
+    if (shouldRefresh) _reload();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _handleBack();
+        if (shouldPop) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        // Sengaja tanpa AppBar — cuma halaman web murni.
+        body: SafeArea(
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: _onPointerDown,
+            onPointerMove: _onPointerMove,
+            onPointerUp: _onPointerUp,
+            onPointerCancel: _onPointerCancel,
+            child: Stack(
+              children: [
+                WebViewWidget(controller: _controller),
+                if (_dragDistance > 0 || _isRefreshing)
+                  Positioned(
+                    top: _isRefreshing ? 16 : (_dragDistance / 1.5) - 20,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: SizedBox(
+                        height: 30,
+                        width: 30,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          value: _isRefreshing
+                              ? null
+                              : (_dragDistance / _refreshTriggerDistance)
+                                  .clamp(0, 1),
+                          color: kBrandColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (_isLoading && !_isRefreshing)
+                  const Center(
+                    child: CircularProgressIndicator(color: kBrandColor),
+                  ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
