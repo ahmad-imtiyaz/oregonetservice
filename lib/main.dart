@@ -60,7 +60,10 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
   bool _isLoading = true;
   bool _isRefreshing = false;
   bool _isPickingFile = false;
+  bool _hasError = false;
 
+  static const MethodChannel _fileProviderChannel =
+      MethodChannel('com.oregonetservice/fileprovider');
   // State untuk gesture pull-to-refresh manual (dipantau lewat Listener,
   // bukan GestureDetector, supaya scroll WebView tidak ikut ke-block).
   double _dragDistance = 0;
@@ -116,6 +119,22 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
     return best;
   }
 
+  /// Konversi path file lokal jadi content:// URI lewat FileProvider,
+  /// supaya WebView (proses Chromium-nya) bisa baca file dari cache
+  /// privat app. Fallback ke file:// kalau channel-nya gagal.
+  Future<String> _toContentUri(String path) async {
+    try {
+      final uri = await _fileProviderChannel.invokeMethod<String>(
+        'getUriForFile',
+        {'path': path},
+      );
+      if (uri != null) return uri;
+    } catch (e) {
+      debugPrint('FileProvider channel error: $e');
+    }
+    return Uri.file(path).toString();
+  }
+
   WebViewController _createController() {
     late final PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
@@ -134,7 +153,12 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) {
-            if (mounted) setState(() => _isLoading = true);
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _hasError = false;
+              });
+            }
           },
           onPageFinished: (_) {
             if (mounted) {
@@ -149,6 +173,9 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
               setState(() {
                 _isLoading = false;
                 _isRefreshing = false;
+                if (_.isForMainFrame ?? true) {
+                  _hasError = true;
+                }
               });
             }
           },
@@ -182,7 +209,7 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
           for (final f in files) {
             if (f.path == null) continue;
             final finalPath = await _compressIfImage(f.path!);
-            uris.add(Uri.file(finalPath).toString());
+            uris.add(await _toContentUri(finalPath));
           }
           return uris;
         } catch (e, st) {
@@ -305,6 +332,37 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
             child: Stack(
               children: [
                 WebViewWidget(controller: _controller),
+                if (_hasError)
+                  Container(
+                    color: Colors.white,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.wifi_off_rounded,
+                            size: 56, color: Colors.grey),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Gagal memuat halaman.\nPeriksa koneksi internet kamu.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 16, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() => _hasError = false);
+                            _controller.reload();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kBrandColor,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Coba Lagi'),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (_dragDistance > 0 || _isRefreshing)
                   Positioned(
                     top: _isRefreshing ? 16 : (_dragDistance / 1.5) - 20,
