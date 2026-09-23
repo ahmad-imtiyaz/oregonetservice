@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'whatsapp_link.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -168,12 +169,12 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
               });
             }
           },
-          onWebResourceError: (_) {
+          onWebResourceError: (error) {
             if (mounted) {
               setState(() {
                 _isLoading = false;
                 _isRefreshing = false;
-                if (_.isForMainFrame ?? true) {
+                if (error.isForMainFrame ?? true) {
                   _hasError = true;
                 }
               });
@@ -181,7 +182,14 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
           },
           // Semua navigasi tetap ditangani di dalam WebView ini.
           // Tidak pernah dilempar ke Chrome/Edge/browser lain.
-          onNavigationRequest: (request) => NavigationDecision.navigate,
+          onNavigationRequest: (request) {
+            final uri = Uri.tryParse(request.url);
+            if (uri != null && isWhatsAppLink(uri)) {
+              openExternally(uri);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
         ),
       )
       ..loadRequest(Uri.parse(kHomeUrl));
