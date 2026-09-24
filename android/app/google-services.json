@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "164245249885",
+    "project_id": "oregonet-49a3f",
+    "storage_bucket": "oregonet-49a3f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:164245249885:android:25bcc91f8f6b52f492d2b4",
+        "android_client_info": {
+          "package_name": "com.example.oregonetservice"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzuLDPWRElj8ECp3j938eaYI4zXw59ONo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

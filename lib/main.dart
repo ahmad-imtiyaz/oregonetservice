@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'whatsapp_link.dart';
+import 'push_notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -57,6 +58,8 @@ class WebViewHomePage extends StatefulWidget {
 
 class _WebViewHomePageState extends State<WebViewHomePage> {
   late final WebViewController _controller;
+  late final PushNotifications _push;
+  String? _fcmToken;
 
   bool _isLoading = true;
   bool _isRefreshing = false;
@@ -76,6 +79,18 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
   void initState() {
     super.initState();
     _controller = _createController();
+
+    _push = PushNotifications(
+      onToken: (token) {
+        _fcmToken = token;
+        injectFcmToken(_controller, token);
+      },
+      onOpenPath: (path) {
+        final uri = resolveAppPath(path, Uri.parse(kHomeUrl));
+        if (uri != null) _controller.loadRequest(uri);
+      },
+    );
+    _push.init();
   }
 
   /// Kompres gambar (JPG/PNG) supaya di bawah batas server.
@@ -162,6 +177,8 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
             }
           },
           onPageFinished: (_) {
+            final token = _fcmToken;
+            if (token != null) injectFcmToken(_controller, token);
             if (mounted) {
               setState(() {
                 _isLoading = false;

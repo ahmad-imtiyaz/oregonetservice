@@ -14,9 +14,12 @@ dependencies:
   webview_flutter_android: ^4.3.2
   webview_flutter_wkwebview: ^3.16.0
   file_picker: ^13.1.0
-  flutter_image_compress: ^2.3.0
+  flutter_image_compress: ^2.4.0
   path_provider: ^2.1.4
   url_launcher: ^6.3.2
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
+  flutter_local_notifications: ^20.0.0
 
 dev_dependencies:
   flutter_test:
@@ -31,10 +34,6 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/images/logo.png"
   min_sdk_android: 21
-  # Kalau logonya kotak dengan sudut lancip dan mau dipotong bulat/rounded
-  # otomatis oleh Android, aktifkan baris berikut:
-  # adaptive_icon_background: "#FFFFFF"
-  # adaptive_icon_foreground: "assets/images/logo.png"
 
 # --- Konfigurasi splash screen, digenerate dari assets/images/logo.png ---
 flutter_native_splash:
