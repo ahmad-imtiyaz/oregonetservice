@@ -35,15 +35,16 @@ flutter_launcher_icons:
   image_path: "assets/images/logo.png"
   min_sdk_android: 21
 
-# --- Konfigurasi splash screen, digenerate dari assets/images/logo.png ---
+# --- Konfigurasi splash screen, digenerate dari assets/images/splash_logo.png ---
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/images/logo.png
+  image: assets/images/splash_logo.png
   android_12:
-    image: assets/images/logo.png
+    image: assets/images/splash_logo.png
     color: "#FFFFFF"
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/logo.png
+    - assets/images/splash_logo.png

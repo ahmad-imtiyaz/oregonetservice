@@ -75,6 +75,12 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
   double? _dragStartY;
   static const double _refreshTriggerDistance = 90;
 
+  // Splash overlay state
+  bool _showSplash = true;
+  bool _removeSplash = false;
+  bool _minSplashDone = false;
+  bool _firstLoadDone = false;
+
   @override
   void initState() {
     super.initState();
@@ -91,6 +97,17 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
       },
     );
     _push.init();
+
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      _minSplashDone = true;
+      _maybeHideSplash();
+    });
+  }
+
+  void _maybeHideSplash() {
+    if (mounted && _minSplashDone && _firstLoadDone && _showSplash) {
+      setState(() => _showSplash = false);
+    }
   }
 
   /// Kompres gambar (JPG/PNG) supaya di bawah batas server.
@@ -185,6 +202,8 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
                 _isRefreshing = false;
               });
             }
+            _firstLoadDone = true;
+            _maybeHideSplash();
           },
           onWebResourceError: (error) {
             if (mounted) {
@@ -195,6 +214,10 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
                   _hasError = true;
                 }
               });
+            }
+            if (error.isForMainFrame ?? true) {
+              _firstLoadDone = true;
+              _maybeHideSplash();
             }
           },
           // Semua navigasi tetap ditangani di dalam WebView ini.
@@ -346,9 +369,11 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
         }
       },
       child: Scaffold(
-        // Sengaja tanpa AppBar — cuma halaman web murni.
-        body: SafeArea(
-          child: Listener(
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            SafeArea(
+              child: Listener(
             behavior: HitTestBehavior.translucent,
             onPointerDown: _onPointerDown,
             onPointerMove: _onPointerMove,
@@ -416,6 +441,87 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
             ),
           ),
         ),
+        if (!_removeSplash)
+      Positioned.fill(
+        child: IgnorePointer(
+          ignoring: !_showSplash,
+          child: AnimatedOpacity(
+            opacity: _showSplash ? 1 : 0,
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeOut,
+            onEnd: () {
+              if (!_showSplash && mounted) {
+                setState(() => _removeSplash = true);
+              }
+            },
+            child: const SplashOverlay(),
+          ),
+        ),
+      ),
+  ],
+),
+    ),
+  );
+  }
+}
+
+class SplashOverlay extends StatefulWidget {
+  const SplashOverlay({super.key});
+
+  @override
+  State<SplashOverlay> createState() => _SplashOverlayState();
+}
+
+class _SplashOverlayState extends State<SplashOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _scale = Tween<double>(begin: 1.0, end: 1.06)
+      .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.white,
+      child: Stack(
+        children: [
+          Center(
+            child: ScaleTransition(
+              scale: _scale,
+              // 288 = ukuran area ikon splash Android 12 (biar posisinya sama)
+              child: Image.asset(
+                'assets/images/splash_logo.png',
+                width: 288,
+                height: 288,
+              ),
+            ),
+          ),
+          Center(
+            child: Transform.translate(
+              offset: const Offset(0, 110),
+              child: SizedBox(
+                width: 110,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: const LinearProgressIndicator(
+                    minHeight: 3,
+                    color: kBrandColor,
+                    backgroundColor: Color(0x1F8B0021),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
