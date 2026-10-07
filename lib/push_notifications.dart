@@ -75,7 +75,7 @@ class PushNotifications {
       if (initial != null) _openFromMessage(initial);
 
       final token = await messaging.getToken();
-      debugPrint('FCM token: $token'); // Log token FCM ke console
+      debugPrint('FCM token diterima (${token?.length ?? 0} chars)');
       if (token != null) onToken(token);
       messaging.onTokenRefresh.listen(onToken);
     } catch (e, st) {

@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "oregonetservice" "\0"
+            VALUE "FileDescription", "oregonet" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "oregonetservice" "\0"
+            VALUE "InternalName", "oregonet" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "oregonetservice.exe" "\0"
-            VALUE "ProductName", "oregonetservice" "\0"
+            VALUE "OriginalFilename", "oregonet.exe" "\0"
+            VALUE "ProductName", "oregonet" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

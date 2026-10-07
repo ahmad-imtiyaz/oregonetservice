@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'whatsapp_link.dart';
 import 'push_notifications.dart';
@@ -12,7 +13,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// URL utama yang ditampilkan di WebView.
-const String kHomeUrl = 'https://oregonetservice.my.id/';
+const String kHomeUrl = 'https://oregonetservice.my.id/login';
 
 /// Warna brand, diambil dari logo Oregonet.
 const Color kBrandColor = Color(0xFF8B0021);
@@ -38,7 +39,7 @@ class OregonetServiceApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Oregonet Service',
+      title: 'oregonet',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: kBrandColor),
@@ -238,7 +239,7 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
     if (controller.platform is AndroidWebViewController) {
       final androidController = controller.platform as AndroidWebViewController;
       androidController.setMediaPlaybackRequiresUserGesture(false);
-      AndroidWebViewController.enableDebugging(true);
+      if (kDebugMode) AndroidWebViewController.enableDebugging(true);
       androidController.setOnShowFileSelector((params) async {
         if (_isPickingFile) return <String>[];
         _isPickingFile = true;
@@ -374,94 +375,95 @@ class _WebViewHomePageState extends State<WebViewHomePage> {
           children: [
             SafeArea(
               child: Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: _onPointerDown,
-            onPointerMove: _onPointerMove,
-            onPointerUp: _onPointerUp,
-            onPointerCancel: _onPointerCancel,
-            child: Stack(
-              children: [
-                WebViewWidget(controller: _controller),
-                if (_hasError)
-                  Container(
-                    color: Colors.white,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.wifi_off_rounded,
-                            size: 56, color: Colors.grey),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Gagal memuat halaman.\nPeriksa koneksi internet kamu.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 16, color: Colors.black87),
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() => _hasError = false);
-                            _controller.reload();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: kBrandColor,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Coba Lagi'),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (_dragDistance > 0 || _isRefreshing)
-                  Positioned(
-                    top: _isRefreshing ? 16 : (_dragDistance / 1.5) - 20,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: SizedBox(
-                        height: 30,
-                        width: 30,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3,
-                          value: _isRefreshing
-                              ? null
-                              : (_dragDistance / _refreshTriggerDistance)
-                                  .clamp(0, 1),
-                          color: kBrandColor,
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: _onPointerDown,
+                onPointerMove: _onPointerMove,
+                onPointerUp: _onPointerUp,
+                onPointerCancel: _onPointerCancel,
+                child: Stack(
+                  children: [
+                    WebViewWidget(controller: _controller),
+                    if (_hasError)
+                      Container(
+                        color: Colors.white,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.wifi_off_rounded,
+                                size: 56, color: Colors.grey),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Gagal memuat halaman.\nPeriksa koneksi internet kamu.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 16, color: Colors.black87),
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton(
+                              onPressed: () {
+                                setState(() => _hasError = false);
+                                _controller.reload();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kBrandColor,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Coba Lagi'),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ),
-                if (_isLoading && !_isRefreshing)
-                  const Center(
-                    child: CircularProgressIndicator(color: kBrandColor),
-                  ),
-              ],
+                    if (_dragDistance > 0 || _isRefreshing)
+                      Positioned(
+                        top: _isRefreshing ? 16 : (_dragDistance / 1.5) - 20,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: SizedBox(
+                            height: 30,
+                            width: 30,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              value: _isRefreshing
+                                  ? null
+                                  : (_dragDistance / _refreshTriggerDistance)
+                                      .clamp(0, 1),
+                              color: kBrandColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_isLoading && !_isRefreshing)
+                      const Center(
+                        child: CircularProgressIndicator(color: kBrandColor),
+                      ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
-        if (!_removeSplash)
-      Positioned.fill(
-        child: IgnorePointer(
-          ignoring: !_showSplash,
-          child: AnimatedOpacity(
-            opacity: _showSplash ? 1 : 0,
-            duration: const Duration(milliseconds: 450),
-            curve: Curves.easeOut,
-            onEnd: () {
-              if (!_showSplash && mounted) {
-                setState(() => _removeSplash = true);
-              }
-            },
-            child: const SplashOverlay(),
-          ),
+            if (!_removeSplash)
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: !_showSplash,
+                  child: AnimatedOpacity(
+                    opacity: _showSplash ? 1 : 0,
+                    duration: const Duration(milliseconds: 450),
+                    curve: Curves.easeOut,
+                    onEnd: () {
+                      if (!_showSplash && mounted) {
+                        setState(() => _removeSplash = true);
+                      }
+                    },
+                    child: const SplashOverlay(),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
-  ],
-),
-    ),
-  );
+    );
   }
 }
 
